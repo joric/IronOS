@@ -25,7 +25,7 @@ bool               OLED::initDone = false;
 uint8_t            OLED::displayOffset;
 uint8_t            OLED::screenBuffer[16 + (OLED_WIDTH * 2) + 10]; // The data buffer
 uint8_t            OLED::secondFrameBuffer[OLED_WIDTH * 2];
-
+uint32_t           OLED::displayChecksum;
 /*Setup params for the OLED screen*/
 /*http://www.displayfuture.com/Display/datasheet/controller/SSD1307.pdf*/
 /*All commands are prefixed with 0x80*/
@@ -222,7 +222,7 @@ void OLED::maskScrollIndicatorOnOLED() {
   // it from the screen buffer which is updated by `OLED::setRotation`.
   uint8_t rightmostColumn = screenBuffer[7];
   uint8_t maskCommands[]  = {
-      // Set column address:
+       // Set column address:
       //  A[6:0] - Column start address = rightmost column
       //  B[6:0] - Column end address = rightmost column
       0x80,
@@ -361,13 +361,17 @@ void OLED::setRotation(bool leftHanded) {
     OLED_Setup_Array[9].val = 0xA0;
   }
   I2C_CLASS::writeRegistersBulk(DEVICEADDR_OLED, OLED_Setup_Array, sizeof(OLED_Setup_Array) / sizeof(OLED_Setup_Array[0]));
-
+  osDelay(TICKS_10MS);
   inLeftHandedMode = leftHanded;
 
   screenBuffer[5] = inLeftHandedMode ? 0 : 32;    // display is shifted by 32 in left handed
                                                   // mode as driver ram is 128 wide
   screenBuffer[7] = inLeftHandedMode ? 95 : 0x7F; // End address of the ram segment we are writing to (96 wide)
   screenBuffer[9] = inLeftHandedMode ? 0xC8 : 0xC0;
+  //Force a screen refresh
+  const int len  = FRAMEBUFFER_START + (OLED_WIDTH * 2);
+  I2C_CLASS::Transmit(DEVICEADDR_OLED, screenBuffer, len);
+  osDelay(TICKS_10MS);
 }
 
 void OLED::setBrightness(uint8_t contrast) {
